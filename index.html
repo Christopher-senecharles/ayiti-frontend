@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayiti Form - Formulaires Intelligents pour Haïti</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel pour transformer JSX dans le navigateur -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Axios pour les requêtes HTTP -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f3f4f6; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // CONFIGURATION : CHANGE CETTE URL PAR CELLE DE TON BACKEND RENDER
+        const API_URL = "https://ayiti-form-backend.onrender.com"; 
+
+        // --- COMPOSANTS UI SIMPLIFIÉS ---
+        const Button = ({ children, onClick, variant = "primary", className = "", disabled }) => {
+            const baseClass = "px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md",
+                secondary: "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50",
+                danger: "bg-red-500 text-white hover:bg-red-600",
+                whatsapp: "bg-green-500 text-white hover:bg-green-600"
+            };
+            return (
+                <button onClick={onClick} disabled={disabled} className={`${baseClass} ${variants[variant]} ${className}`}>
+                    {children}
+                </button>
+            );
+        };
+
+        const Input = ({ label, type = "text", value, onChange, placeholder, required }) => (
+            <div className="mb-4">
+                {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+                <input 
+                    type={type} 
+                    value={value} 
+                    onChange={onChange} 
+                    placeholder={placeholder}
+                    required={required}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow"
+                />
+            </div>
+        );
+
+        // --- APP PRINCIPALE ---
+        const App = () => {
+            const [view, setView] = useState('home'); // home, login, register, dashboard, public-form
+            const [token, setToken] = useState(localStorage.getItem('ayiti_token'));
+            const [currentUser, setCurrentUser] = useState(null);
+            
+            // État global pour naviguer vers un formulaire public spécifique
+            const [publicFormId, setPublicFormId] = useState(null);
+
+            useEffect(() => {
+                if (token) {
+                    fetchProfile();
+                } else {
+                    setView('home');
+                }
+            }, [token]);
+
+            const fetchProfile = async () => {
+                try {
+                    const res = await axios.get(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+                    // Note: Le backend actuel ne gère pas /me, donc on suppose que le token est valide pour l'instant
+                    // Pour faire simple, on va juste afficher le dashboard si token existe
+                    setCurrentUser({ email: "utilisateur@test.com" }); 
+                } catch (e) {
+                    logout();
+                }
+            };
+
+            const logout = () => {
+                localStorage.removeItem('ayiti_token');
+                setToken(null);
+                setCurrentUser(null);
+                setView('home');
+            };
+
+            const navigateToPublicForm = (id) => {
+                setPublicFormId(id);
+                setView('public-form');
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* NAVBAR */}
+                    <nav className="bg-white shadow-sm sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between h-16 items-center">
+                                <div className="flex items-center cursor-pointer" onClick={() => setView('home')}>
+                                    <span className="text-2xl font-bold text-blue-600">Ayiti<span className="text-gray-800">Form</span></span>
+                                </div>
+                                <div className="flex space-x-4">
+                                    {!token ? (
+                                        <>
+                                            <Button variant="secondary" onClick={() => setView('login')}>Connexion</Button>
+                                            <Button onClick={() => setView('register')}>S'inscrire Gratuitement</Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Button variant="secondary" onClick={() => setView('dashboard')}>Tableau de Bord</Button>
+                                            <Button variant="danger" onClick={logout}>Déconnexion</Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* CONTENT AREA */}
+                    <main className="flex-grow container mx-auto px-4 py-8">
+                        {view === 'home' && <HomePage onStart={() => setView('register')} />}
+                        {view === 'login' && <LoginPage onSuccess={(t) => { localStorage.setItem('ayiti_token', t); setToken(t); }} />}
+                        {view === 'register' && <RegisterPage onSuccess={(t) => { localStorage.setItem('ayiti_token', t); setToken(t); }} />}
+                        {view === 'dashboard' && token && <DashboardPage onViewForm={navigateToPublicForm} />}
+                        {view === 'public-form' && publicFormId && <PublicFormView formId={publicFormId} />}
+                    </main>
+
+                    {/* FOOTER */}
+                    <footer className="bg-gray-800 text-white py-8 mt-auto">
+                        <div className="container mx-auto px-4 text-center">
+                            <p>&copy; 2026 Ayiti Form. Conçu pour les entrepreneurs haïtiens.</p>
+                            <p className="text-sm text-gray-400 mt-2">Support WhatsApp: +509 3135 4041</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        };
+
+        // --- PAGE D'ACCUEIL MARKETING ---
+        const HomePage = ({ onStart }) => (
+            <div className="text-center max-w-3xl mx-auto fade-in">
+                <h1 className="text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
+                    Transformez vos visiteurs en clients.<br/>
+                    <span className="text-blue-600">Sans coder. En Créole.</span>
+                </h1>
+                <p className="text-xl text-gray-600 mb-8">
+                    Créez des formulaires de commande, de réservation ou de contact qui envoient des alertes <strong>WhatsApp instantanées</strong> aux commerçants haïtiens.
+                </p>
+                <div className="flex justify-center gap-4">
+                    <Button onClick={onStart} className="text-lg px-8 py-4">Commencer Gratuitement</Button>
+                    <a href="#demo" className="inline-flex items-center px-8 py-4 border border-transparent text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Voir la Démo</a>
+                </div>
+                
+                <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                    <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 text-blue-600">⚡</div>
+                        <h3 className="font-bold text-lg mb-2">Alertes WhatsApp</h3>
+                        <p className="text-gray-600">Recevez chaque demande directement sur votre téléphone. Pas d'email ignoré.</p>
+                    </div>
+                    <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 text-green-600">🇭🇹</div>
+                        <h3 className="font-bold text-lg mb-2">Adapté à Haïti</h3>
+                        <p className="text-gray-600">Interface simple, validation des numéros +509, pensé pour la réalité locale.</p>
+                    </div>
+                    <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 text-purple-600">📊</div>
+                        <h3 className="font-bold text-lg mb-2">Historique Complet</h3>
+                        <p className="text-gray-600">Retrouvez toutes vos demandes passées dans votre tableau de bord sécurisé.</p>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // --- PAGE CONNEXION ---
+        const LoginPage = ({ onSuccess }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                try {
+                    const res = await axios.post(`${API_URL}/api/auth/login`, { email, password });
+                    onSuccess(res.data.token);
+                } catch (err) {
+                    setError(err.response?.data?.error || 'Erreur de connexion');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-md fade-in">
+                    <h2 className="text-2xl font-bold mb-6 text-center">Connexion</h2>
+                    {error && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">{error}</div>}
+                    <form onSubmit={handleSubmit}>
+                        <Input label="Email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
+                        <Input label="Mot de passe" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
+                        <Button className="w-full mt-4" disabled={loading}>{loading ? 'Chargement...' : 'Se connecter'}</Button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- PAGE INSCRIPTION ---
+        const RegisterPage = ({ onSuccess }) => {
+            const [fullName, setFullName] = useState('');
+            const [email, setEmail] = useState('');
+            const [whatsapp, setWhatsapp] = useState('+509 ');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                try {
+                    const res = await axios.post(`${API_URL}/api/auth/register`, { 
+                        fullName, email, whatsappNumber: whatsapp, password 
+                    });
+                    onSuccess(res.data.token);
+                } catch (err) {
+                    setError(err.response?.data?.error || 'Erreur inscription');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-md fade-in">
+                    <h2 className="text-2xl font-bold mb-6 text-center">Créer un compte Pro</h2>
+                    {error && <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">{error}</div>}
+                    <form onSubmit={handleSubmit}>
+                        <Input label="Nom Complet" value={fullName} onChange={(e)=>setFullName(e.target.value)} required />
+                        <Input label="Email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required />
+                        <Input label="Numéro WhatsApp (pour recevoir les alertes)" value={whatsapp} onChange={(e)=>setWhatsapp(e.target.value)} required />
+                        <Input label="Mot de passe" type="password" value={password} onChange={(e)=>setPassword(e.target.value)} required />
+                        <Button className="w-full mt-4" disabled={loading}>{loading ? 'Création...' : 'S\'inscrire Gratuitement'}</Button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- DASHBOARD COMMERCANT ---
+        const DashboardPage = ({ onViewForm }) => {
+            const [forms, setForms] = useState([]);
+            const [showBuilder, setShowBuilder] = useState(false);
+
+            useEffect(() => {
+                loadForms();
+            }, []);
+
+            const loadForms = async () => {
+                try {
+                    const res = await axios.get(`${API_URL}/api/forms/my`, { headers: { Authorization: `Bearer ${localStorage.getItem('ayiti_token')}` } });
+                    setForms(res.data);
+                } catch (e) { console.error(e); }
+            };
+
+            const handleCreateSuccess = () => {
+                setShowBuilder(false);
+                loadForms();
+            };
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-8">
+                        <h2 className="text-3xl font-bold text-gray-900">Mes Formulaires</h2>
+                        <Button onClick={() => setShowBuilder(!showBuilder)}>
+                            {showBuilder ? 'Annuler' : '+ Nouveau Formulaire'}
+                        </Button>
+                    </div>
+
+                    {showBuilder && (
+                        <div className="mb-8 bg-white p-6 rounded-xl shadow-lg border-l-4 border-blue-500">
+                            <FormBuilder onSaveSuccess={handleCreateSuccess} />
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {forms.length === 0 && !showBuilder && (
+                            <div className="col-span-full text-center py-12 text-gray-500">
+                                Aucun formulaire créé. Cliquez sur "+ Nouveau Formulaire" pour commencer.
+                            </div>
+                        )}
+                        
+                        {forms.map(form => (
+                            <div key={form.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                                <h3 className="font-bold text-lg text-gray-800 mb-2 truncate">{form.form_title}</h3>
+                                <p className="text-sm text-gray-500 mb-4">Créé le {new Date(form.created_at).toLocaleDateString()}</p>
+                                <div className="flex gap-2">
+                                    <Button variant="secondary" className="flex-1 text-sm" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/#/form/${form.id}`)}>
+                                        Copier Lien
+                                    </Button>
+                                    <Button variant="primary" className="flex-1 text-sm" onClick={() => onViewForm(form.id)}>
+                                        Voir Aperçu
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- GENERATEUR DE FORMULAIRE (SIMPLE) ---
+        const FormBuilder = ({ onSaveSuccess }) => {
+            const [title, setTitle] = useState('Mon Formulaire de Commande');
+            const [fields, setFields] = useState([
+                { id: 1, label: 'Nom Client', type: 'text', required: true },
+                { id: 2, label: 'Téléphone (+509)', type: 'tel', required: true },
+                { id: 3, label: 'Message / Détails', type: 'textarea', required: false }
+            ]);
+
+            const addField = () => {
+                setFields([...fields, { id: Date.now(), label: '', type: 'text', required: false }]);
+            };
+
+            const removeField = (id) => {
+                setFields(fields.filter(f => f.id !== id));
+            };
+
+            const updateField = (id, key, value) => {
+                setFields(fields.map(f => f.id === id ? { ...f, [key]: value } : f));
+            };
+
+            const saveForm = async () => {
+                try {
+                    await axios.post(`${API_URL}/api/forms`, { title, fields }, {
+                        headers: { Authorization: `Bearer ${localStorage.getItem('ayiti_token')}` }
+                    });
+                    alert('Formulaire sauvegardé !');
+                    onSaveSuccess();
+                } catch (e) {
+                    alert('Erreur: ' + (e.response?.data?.error || 'Inconnu'));
+                }
+            };
+
+            return (
+                <div>
+                    <h3 className="text-xl font-bold mb-4">Configuration</h3>
+                    <Input label="Titre du formulaire" value={title} onChange={(e)=>setTitle(e.target.value)} />
+                    
+                    <div className="space-y-3 mb-4">
+                        {fields.map(field => (
+                            <div key={field.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                                <select value={field.type} onChange={(e)=>updateField(field.id, 'type', e.target.value)} className="border rounded p-1 text-sm">
+                                    <option value="text">Texte</option>
+                                    <option value="tel">Téléphone</option>
+                                    <option value="email">Email</option>
+                                    <option value="textarea">Long Texte</option>
+                                </select>
+                                <input 
+                                    type="text" 
+                                    placeholder="Label (ex: Nom)" 
+                                    value={field.label} 
+                                    onChange={(e)=>updateField(field.id, 'label', e.target.value)}
+                                    className="flex-1 border rounded p-1 text-sm"
+                                />
+                                <label className="flex items-center gap-1 text-xs">
+                                    <input type="checkbox" checked={field.required} onChange={(e)=>updateField(field.id, 'required', e.target.checked)} /> Req.
+                                </label>
+                                <button onClick={()=>removeField(field.id)} className="text-red-500 hover:text-red-700">×</button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <Button variant="secondary" onClick={addField} className="mb-4 w-full border-dashed">+ Ajouter un champ</Button>
+                    <Button onClick={saveForm} className="w-full">Enregistrer le Formulaire</Button>
+                </div>
+            );
+        };
+
+        // --- AFFICHAGE PUBLIC DU FORMULAIRE ---
+        const PublicFormView = ({ formId }) => {
+            const [formData, setFormData] = useState(null);
+            const [inputs, setInputs] = useState({});
+            const [loading, setLoading] = useState(true);
+            const [submitted, setSubmitted] = useState(false);
+            const [whatsappLink, setWhatsappLink] = useState(null);
+
+            useEffect(() => {
+                const fetchForm = async () => {
+                    try {
+                        const res = await axios.get(`${API_URL}/api/forms/public/${formId}`);
+                        setFormData(res.data);
+                        // Init inputs
+                        const initial = {};
+                        res.data.form_fields.forEach(f => initial[f.id] = '');
+                        setInputs(initial);
+                    } catch (e) {
+                        alert('Formulaire introuvable.');
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+                fetchForm();
+            }, [formId]);
+
+            const handleChange = (id, val) => {
+                setInputs(prev => ({ ...prev, [id]: val }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await axios.post(`${API_URL}/api/submissions`, {
+                        formId,
+                        data: inputs
+                    });
+                    setSubmitted(true);
+                    if(res.data.previewLink) setWhatsappLink(res.data.previewLink);
+                } catch (e) {
+                    alert('Erreur lors de l\'envoi.');
+                }
+            };
+
+            if (loading) return <div className="text-center py-20">Chargement...</div>;
+            
+            if (submitted) return (
+                <div className="max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg text-center fade-in">
+                    <div className="text-green-500 text-6xl mb-4">✓</div>
+                    <h2 className="text-2xl font-bold mb-2">Merci !</h2>
+                    <p className="text-gray-600 mb-6">Votre demande a bien été envoyée. Le commerçant vous contactera très vite sur WhatsApp.</p>
+                    {whatsappLink && (
+                        <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="inline-block bg-green-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-600">
+                            Ouvrir WhatsApp maintenant
+                        </a>
+                    )}
+                </div>
+            );
+
+            return (
+                <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg fade-in">
+                    <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">{formData.form_title}</h2>
+                    <form onSubmit={handleSubmit}>
+                        {formData.form_fields.map(field => (
+                            <div key={field.id} className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                                </label>
+                                {field.type === 'textarea' ? (
+                                    <textarea 
+                                        required={field.required}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        rows="4"
+                                        value={inputs[field.id]}
+                                        onChange={(e) => handleChange(field.id, e.target.value)}
+                                    />
+                                ) : (
+                                    <input 
+                                        type={field.type}
+                                        required={field.required}
+                                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        placeholder={field.type === 'tel' ? '+509...' : ''}
+                                        value={inputs[field.id]}
+                                        onChange={(e) => handleChange(field.id, e.target.value)}
+                                    />
+                                )}
+                            </div>
+                        ))}
+                        <Button type="submit" className="w-full mt-4 bg-green-600 hover:bg-green-700">
+                            Envoyer ma Demande
+                        </Button>
+                    </form>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
